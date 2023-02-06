@@ -40,9 +40,10 @@
  *
  * HINT: You will probably need to change this structure
  */
-struct avdc_cache_line {
+struct avdc_cache_line
+{
         avdc_tag_t tag;
-        int        valid;
+        int valid;
 };
 
 /**
@@ -79,7 +80,8 @@ log2_int32(uint32_t value)
 {
         int i;
 
-        for (i = 0; i < 32; i++) {
+        for (i = 0; i < 32; i++)
+        {
                 value >>= 1;
                 if (value == 0)
                         break;
@@ -96,15 +98,15 @@ log2_int32(uint32_t value)
 static int
 is_power_of_two(uint64_t val)
 {
-        return ((((val)&(val-1)) == 0) && (val > 0));
+        return ((((val) & (val - 1)) == 0) && (val > 0));
 }
 
-void
-avdc_dbg_log(avdark_cache_t *self, const char *msg, ...)
+void avdc_dbg_log(avdark_cache_t *self, const char *msg, ...)
 {
         va_list ap;
-        
-        if (self->dbg) {
+
+        if (self->dbg)
+        {
                 const char *name = self->dbg_name ? self->dbg_name : "AVDC";
                 fprintf(stderr, "[%s] dbg: ", name);
                 va_start(ap, msg);
@@ -113,9 +115,7 @@ avdc_dbg_log(avdark_cache_t *self, const char *msg, ...)
         }
 }
 
-
-void
-avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
+void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
 {
         /* HINT: You will need to update this function */
         avdc_tag_t tag = tag_from_pa(self, pa);
@@ -123,12 +123,14 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
         int hit;
 
         hit = self->lines[index].valid && self->lines[index].tag == tag;
-        if (!hit) {
+        if (!hit)
+        {
                 self->lines[index].valid = 1;
                 self->lines[index].tag = tag;
         }
 
-        switch (type) {
+        switch (type)
+        {
         case AVDC_READ: /* Read accesses */
                 avdc_dbg_log(self, "read: pa: 0x%.16lx, tag: 0x%.16lx, index: %d, hit: %d\n",
                              (unsigned long)pa, (unsigned long)tag, index, hit);
@@ -147,20 +149,21 @@ avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
         }
 }
 
-void
-avdc_flush_cache(avdark_cache_t *self)
+void avdc_flush_cache(avdark_cache_t *self)
 {
         /* HINT: You will need to update this function */
-        for (int i = 0; i < self->number_of_sets; i++) {
-                self->lines[i].valid = 0;
-                self->lines[i].tag = 0;
+        for (size_t i = 0; i < self->assoc; i++)
+        {
+                for (int i = 0; i < self->number_of_sets; i++)
+                {
+                        self->lines[i].valid = 0;
+                        self->lines[i].tag = 0;
+                }
         }
 }
 
-
-int
-avdc_resize(avdark_cache_t *self,
-            avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc)
+int avdc_resize(avdark_cache_t *self,
+                avdc_size_t size, avdc_block_size_t block_size, avdc_assoc_t assoc)
 {
         /* HINT: This function precomputes some common values and
          * allocates the self->lines array. You will need to update
@@ -171,20 +174,25 @@ avdc_resize(avdark_cache_t *self,
         /* Verify that the parameters are sane */
         if (!is_power_of_two(size) ||
             !is_power_of_two(block_size) ||
-            !is_power_of_two(assoc)) {
+            !is_power_of_two(assoc))
+        {
                 fprintf(stderr, "size, block-size and assoc all have to be powers of two and > zero\n");
                 return 0;
         }
 
         /* Update the stored parameters */
         self->size = size;
-        self->block_size = block_size;
+        self->block_size = block_size; // Single cache line
         self->assoc = assoc;
 
         /* Cache some common values */
-        self->number_of_sets = (self->size / self->block_size) / self->assoc;
-        self->block_size_log2 = log2_int32(self->block_size);
+        self->number_of_sets = (self->size / self->block_size) / self->assoc; // sets = entries / associativity
+        self->block_size_log2 = log2_int32(self->block_size); // bits to identify a word + mux select bits
+        int index = log2_int32(self->number_of_sets); 
         self->tag_shift = self->block_size_log2 + log2_int32(self->number_of_sets);
+
+        printf("Size=%d\nAssoc=%d-way\nCL=%d\nsets=%d\n", self->size, self->assoc, self->block_size, self->number_of_sets);
+        printf("block_size_lg2=%d\nindex=%d\ntag_shift=%d\n", self->block_size_log2, index, self->tag_shift);
 
         /* (Re-)Allocate space for the tags array */
         if (self->lines)
@@ -192,7 +200,9 @@ avdc_resize(avdark_cache_t *self,
         /* HINT: If you change this, you may have to update
          * avdc_delete() to reflect changes to how thie self->lines
          * array is allocated. */
-        self->lines = AVDC_MALLOC(self->number_of_sets, avdc_cache_line_t);
+        // associativity = 1 -> direct mapped
+        // associativity > 1 -> more then 1 cache line on each set
+        self->lines = AVDC_MALLOC(self->number_of_sets * self->assoc, avdc_cache_line_t);
 
         /* Flush the cache, this initializes the tag array to a known state */
         avdc_flush_cache(self);
@@ -200,16 +210,14 @@ avdc_resize(avdark_cache_t *self,
         return 1;
 }
 
-void
-avdc_print_info(avdark_cache_t *self)
+void avdc_print_info(avdark_cache_t *self)
 {
         fprintf(stderr, "Cache Info\n");
         fprintf(stderr, "size: %d, assoc: %d, line-size: %d\n",
                 self->size, self->assoc, self->block_size);
 }
 
-void
-avdc_print_internals(avdark_cache_t *self)
+void avdc_print_internals(avdark_cache_t *self)
 {
         int i;
 
@@ -223,8 +231,7 @@ avdc_print_internals(avdark_cache_t *self)
                         self->lines[i].valid);
 }
 
-void
-avdc_reset_statistics(avdark_cache_t *self)
+void avdc_reset_statistics(avdark_cache_t *self)
 {
         self->stat_data_read = 0;
         self->stat_data_read_miss = 0;
@@ -243,7 +250,8 @@ avdc_new(avdc_size_t size, avdc_block_size_t block_size,
         memset(self, 0, sizeof(*self));
         self->dbg = 0;
 
-        if (!avdc_resize(self, size, block_size, assoc)) {
+        if (!avdc_resize(self, size, block_size, assoc))
+        {
                 AVDC_FREE(self);
                 return NULL;
         }
@@ -251,8 +259,7 @@ avdc_new(avdc_size_t size, avdc_block_size_t block_size,
         return self;
 }
 
-void
-avdc_delete(avdark_cache_t *self)
+void avdc_delete(avdark_cache_t *self)
 {
         if (self->lines)
                 AVDC_FREE(self->lines);
