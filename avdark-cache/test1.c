@@ -21,10 +21,10 @@
 
 
 #define STAT_ASSERT(c, r, rm, w, wm) do {                       \
-                assertf(c->stat_data_read == (r), "expected: %ld - got %d", c->stat_data_read, r); \ 
-                assertf(c->stat_data_read_miss == (rm), "expected: %ld - got %d", c->stat_data_read_miss, rm); \ 
-                assertf(c->stat_data_write == (w), "expected: %ld - got %d", c->stat_data_write, w); \ 
-                assertf(c->stat_data_write_miss == (wm), "expected: %ld - got %d", c->stat_data_write_miss, wm); \ 
+                assertf(c->stat_data_read == (r), "got: %ld - expected %d", c->stat_data_read, r); \ 
+                assertf(c->stat_data_read_miss == (rm), "got: %ld - expected %d", c->stat_data_read_miss, rm); \ 
+                assertf(c->stat_data_write == (w), "got: %ld - expected %d", c->stat_data_write, w); \ 
+                assertf(c->stat_data_write_miss == (wm), "got: %ld - expected %d", c->stat_data_write_miss, wm); \ 
         } while (0)
 
 #define TEST_SIMPLE_STAT() \
