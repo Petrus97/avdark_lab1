@@ -1,0 +1,16 @@
+define print_matrix
+  set var $matrix = $arg0
+  set var $rows = $arg1
+  set var $cols = $arg2
+  print $matrix
+  # set the index variables
+  set $i = 0
+  while $i < $rows
+    set $j = 0
+    while $j < $cols
+      print $matrix[$i][$j]
+      set $j = $j + 1
+    end
+    set $i = $i + 1
+  end
+end
