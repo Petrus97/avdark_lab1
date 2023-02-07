@@ -240,10 +240,10 @@ assoc.test: $(OBJDIR)test1$(EXE_SUFFIX)
 ###### Special tools' build rules ######
 
 $(OBJDIR)%$(OBJ_SUFFIX) : %.cc
-	$(CXX) $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
+	$(CXX) -g $(TOOL_CXXFLAGS) $(COMP_OBJ)$@ $<
 
 $(OBJDIR)%$(OBJ_SUFFIX) : %.c %.h
-	$(CC) $(TOOL_CFLAGS) $(COMP_OBJ)$@ $<
+	$(CC) -g $(TOOL_CFLAGS) $(COMP_OBJ)$@ $<
 
 $(OBJDIR)avdc$(PINTOOL_SUFFIX) : $(OBJDIR)pin-glue$(OBJ_SUFFIX) $(OBJDIR)avdark-cache$(OBJ_SUFFIX)
 	$(LINKER) $(TOOL_LDFLAGS) $(LINK_EXE)$@ $^ $(TOOL_LPATHS) $(TOOL_LIBS)
@@ -251,7 +251,7 @@ $(OBJDIR)avdc$(PINTOOL_SUFFIX) : $(OBJDIR)pin-glue$(OBJ_SUFFIX) $(OBJDIR)avdark-
 ###### Special applications' build rules ######
 
 $(OBJDIR)test%$(EXE_SUFFIX): test%.c avdark-cache.c
-	$(APP_CC) $(APP_CXXFLAGS) $(COMP_EXE)$@ $^ $(APP_LDFLAGS) $(APP_LIBS)
+	$(APP_CC) -g $(APP_CXXFLAGS) $(COMP_EXE)$@ $^ $(APP_LDFLAGS) $(APP_LIBS)
 
 ###### Special objects' build rules ######
 
