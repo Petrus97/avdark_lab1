@@ -1,6 +1,6 @@
 /**
  * A code skeleton for the matrix multiply bonus assignment.
- * 
+ *
  * Course: Advanced Computer Architecture, Uppsala University
  * Course Part: Lab assignment 1
  *
@@ -17,7 +17,7 @@
 
 /* Size of the matrices to multiply */
 #ifndef SIZE
-#define SIZE 700
+#define SIZE 2000
 #endif
 
 /* HINT: The Makefile allows you to specify L1 and L2 block sizes as
@@ -28,11 +28,44 @@
  * you should setup defaults here if they are undefined.
  */
 
+/**
+ * user1234@tussilago:~/avdark/avdark23-lab1-cachesim/multiply$ lscpu -C
+ * NAME ONE-SIZE ALL-SIZE WAYS TYPE        LEVEL SETS PHY-LINE COHERENCY-SIZE
+ * L1d       16K     512K    4 Data            1   64        1             64
+ * L1i       64K       1M    2 Instruction     1  512        1             64
+ * L2         2M      32M   16 Unified         2 2048        1             64
+ * L3         6M      24M   48 Unified         3 2048        1             64
+ * 
+ */
+
+/*
+// user1234@tussilago:~/avdark/avdark23-lab1-cachesim/multiply$ getconf -a | grep CACHE
+// LEVEL1_ICACHE_SIZE                 65536
+// LEVEL1_ICACHE_ASSOC                
+// LEVEL1_ICACHE_LINESIZE             64
+// LEVEL1_DCACHE_SIZE                 16384
+// LEVEL1_DCACHE_ASSOC                4
+// LEVEL1_DCACHE_LINESIZE             64
+*/
+
+#ifndef L1_BLOCK_SIZE
+#define L1_BLOCK_SIZE 16384
+#endif
+
+#ifndef L2_BLOCK_SIZE
+#define L2_BLOCK_SIZE 2097152
+#endif
+
 
 static volatile double mat_a[SIZE][SIZE];
 static volatile double mat_b[SIZE][SIZE];
 static volatile double mat_c[SIZE][SIZE];
 static volatile double mat_ref[SIZE][SIZE];
+
+static inline int min(int a, int b)
+{
+        return a < b ? a : b;
+}
 
 /**
  * Matrix multiplication. This is the procedure you should try to
@@ -45,6 +78,28 @@ matmul_opt()
          * here. It should calculate mat_c := mat_a * mat_b. See
          * matmul_ref() for a reference solution.
          */
+        /**
+         * The goal is to optimize the use of the L1 cache = 16KB;
+         * We
+         */
+        const int B = (L1_BLOCK_SIZE / SIZE) * sizeof(double);
+        int i, j, k;
+        for (int jj = 0; jj < SIZE; jj = jj + B)
+        {
+                for (int kk = 0; kk < SIZE; kk = kk + B)
+                {
+                        for (i = 0; i < SIZE; i++)
+                        {
+                                for (j = jj; j < min(jj + B, SIZE); j++)
+                                {
+                                        for (k = kk; k < min(kk + B, SIZE); k++)
+                                        {
+                                                mat_c[i][j] += mat_a[i][k] * mat_b[k][j];
+                                        }
+                                }
+                        }
+                }
+        }
 }
 
 /**
@@ -56,9 +111,12 @@ matmul_ref()
 {
         int i, j, k;
 
-        for (i = 0; i < SIZE; i++) {
-                for (j = 0; j < SIZE; j++) {
-                        for (k = 0; k < SIZE; k++) {
+        for (i = 0; i < SIZE; i++)
+        {
+                for (j = 0; j < SIZE; j++)
+                {
+                        for (k = 0; k < SIZE; k++)
+                        {
                                 mat_ref[i][j] += mat_a[i][k] * mat_b[k][j];
                         }
                 }
@@ -75,14 +133,14 @@ verify_result()
         int i, j;
 
         e_sum = 0;
-        for (i = 0; i < SIZE; i++) {
-                for (j = 0; j < SIZE; j++) {
-                        e_sum += mat_c[i][j] < mat_ref[i][j] ?
-                                mat_ref[i][j] - mat_c[i][j] :
-                                mat_c[i][j] - mat_ref[i][j];
+        for (i = 0; i < SIZE; i++)
+        {
+                for (j = 0; j < SIZE; j++)
+                {
+                        e_sum += mat_c[i][j] < mat_ref[i][j] ? mat_ref[i][j] - mat_c[i][j] : mat_c[i][j] - mat_ref[i][j];
                 }
         }
-
+        printf("%.06f\n", e_sum);
         return e_sum < 1E-6;
 }
 
@@ -95,7 +153,8 @@ get_time()
 {
         struct timeval tv;
 
-        if (gettimeofday(&tv, NULL)) {
+        if (gettimeofday(&tv, NULL))
+        {
                 fprintf(stderr, "gettimeofday failed. Aborting.\n");
                 abort();
         }
@@ -113,15 +172,17 @@ init_matrices()
 {
         int i, j;
 
-        for (i = 0; i < SIZE; i++) {
-                for (j = 0; j < SIZE; j++) {
+        for (i = 0; i < SIZE; i++)
+        {
+                for (j = 0; j < SIZE; j++)
+                {
                         mat_a[i][j] = ((i + j) & 0x0F) * 0x1P-4;
                         mat_b[i][j] = (((i << 1) + (j >> 1)) & 0x0F) * 0x1P-4;
                 }
         }
 
-        memset((void*)mat_c, 0, sizeof(mat_c));
-        memset((void*)mat_ref, 0, sizeof(mat_ref));
+        memset((void *)mat_c, 0, sizeof(mat_c));
+        memset((void *)mat_ref, 0, sizeof(mat_ref));
 }
 
 static void
@@ -131,7 +192,8 @@ run_multiply(int verify, int reference)
 
         printf("Matrix size: %dx%d\n", SIZE, SIZE);
 
-        if (!reference) {
+        if (!reference)
+        {
                 printf("Running optimised solution...\n");
                 time_start = get_time();
                 /* mat_c = mat_a * mat_b */
@@ -140,7 +202,8 @@ run_multiply(int verify, int reference)
                 printf("Optimised runtime: %.4f\n", time_stop - time_start);
         }
 
-        if (reference || verify) {
+        if (reference || verify)
+        {
                 printf("Running reference solution...\n");
                 time_start = get_time();
                 matmul_ref();
@@ -148,7 +211,8 @@ run_multiply(int verify, int reference)
                 printf("Reference runtime: %.4f\n", time_stop - time_start);
         }
 
-        if (verify) {
+        if (verify)
+        {
                 printf("Verifying solution... ");
 
                 if (verify_result())
@@ -171,8 +235,7 @@ usage(FILE *out, const char *argv0)
                 argv0);
 }
 
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
         int c;
         int errexit;
@@ -184,8 +247,10 @@ main(int argc, char *argv[])
         errexit = 0;
         verify = 0;
         reference = 0;
-        while ((c = getopt(argc, argv, "vrh")) != -1) {
-                switch (c) {
+        while ((c = getopt(argc, argv, "vrh")) != -1)
+        {
+                switch (c)
+                {
                 case 'v':
                         verify = 1;
                         break;
@@ -211,7 +276,8 @@ main(int argc, char *argv[])
                 }
         }
 
-        if (errexit) {
+        if (errexit)
+        {
                 usage(stderr, argv[0]);
                 exit(2);
         }
@@ -223,7 +289,6 @@ main(int argc, char *argv[])
 
         return 0;
 }
-
 
 /*
  * Local Variables:
