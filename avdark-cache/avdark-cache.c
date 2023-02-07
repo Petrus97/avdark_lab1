@@ -155,8 +155,9 @@ void remove_cache_line(avdark_cache_t *self, avdc_tag_t tag, int index)
                                 self->lines[index][assoc_idx].valid = 1;
                                 // update the correct tag
                                 self->lines[index][assoc_idx].tag = tag;
-                                self->lines[index][assoc_idx].used_recently = false;
-                                break; // at first are all not used
+                                // fetched information from the memory, this is actually used
+                                self->lines[index][assoc_idx].used_recently = true;
+                                break; 
                         }
                 }
         }
@@ -167,10 +168,9 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
         /* HINT: You will need to update this function */
         avdc_tag_t tag = tag_from_pa(self, pa);
         int index = index_from_pa(self, pa);
-        bool hit;
+        bool hit = false;
 
         hit = check_hit(self, index, tag);
-        // self->lines[index].valid && self->lines[index].tag == tag;
         if (!hit) // MISS
         {
                 // bring all the cache line in the cache
@@ -183,16 +183,20 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
                 {
                         for (size_t assoc_idx = 0; assoc_idx < self->assoc; assoc_idx++)
                         {
+                                // switch the recently used flag
                                 if (self->lines[index][assoc_idx].tag == tag)
                                 {
                                         self->lines[index][assoc_idx].used_recently = true;
-                                        // break;
                                 }
                                 else
                                 {
                                         self->lines[index][assoc_idx].used_recently = false;
                                 }
                         }
+                }
+                else
+                {
+                        /* do nothing */
                 }
         }
 
@@ -225,7 +229,7 @@ void avdc_flush_cache(avdark_cache_t *self)
                 {
                         self->lines[i][j].valid = 0;
                         self->lines[i][j].tag = 0;
-                        // self->lines[i][j].replace = false;
+                        self->lines[i][j].used_recently = false;
                 }
         }
 }
@@ -256,11 +260,11 @@ int avdc_resize(avdark_cache_t *self,
         /* Cache some common values */
         self->number_of_sets = (self->size / self->block_size) / self->assoc; // sets = entries / associativity
         self->block_size_log2 = log2_int32(self->block_size);                 // bits to identify a word + mux select bits
-        int index = log2_int32(self->number_of_sets);
+        // int index = log2_int32(self->number_of_sets);
         self->tag_shift = self->block_size_log2 + log2_int32(self->number_of_sets);
 
-        printf("Size=%d\nAssoc=%d-way\nCL=%d\nsets=%d\n", self->size, self->assoc, self->block_size, self->number_of_sets);
-        printf("block_size_lg2=%d\nindex=%d\ntag_shift=%d\n", self->block_size_log2, index, self->tag_shift);
+        // printf("Size=%d\nAssoc=%d-way\nCL=%d\nsets=%d\n", self->size, self->assoc, self->block_size, self->number_of_sets);
+        // printf("block_size_lg2=%d\nindex=%d\ntag_shift=%d\n", self->block_size_log2, index, self->tag_shift);
 
         /* (Re-)Allocate space for the tags array */
         if (self->lines)
@@ -270,10 +274,10 @@ int avdc_resize(avdark_cache_t *self,
          * array is allocated. */
         // associativity = 1 -> direct mapped (1D array)
         // associativity = 2 -> more then 1 cache line on each set (2D array)
-        self->lines = AVDC_MALLOC(self->number_of_sets, avdc_cache_line_t *);
+        self->lines = (avdc_cache_line_t**)calloc(self->number_of_sets, sizeof(avdc_cache_line_t*)); // allocate n_sets pointers
         for (size_t i = 0; i < self->number_of_sets; i++)
         {
-                self->lines[i] = AVDC_MALLOC(self->block_size, avdc_cache_line_t);
+                self->lines[i] = (avdc_cache_line_t*)calloc(self->assoc, sizeof(avdc_cache_line_t));
         }
 
         /* Flush the cache, this initializes the tag array to a known state */
