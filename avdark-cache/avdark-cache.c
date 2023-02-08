@@ -141,25 +141,45 @@ bool check_hit(avdark_cache_t *self, int index, avdc_tag_t tag)
 
 void remove_cache_line(avdark_cache_t *self, avdc_tag_t tag, int index)
 {
+        avdc_cache_line_t *set = self->lines[index];
         if (self->assoc == 1)
         {
-                self->lines[index][0].valid = 1;
-                self->lines[index][0].tag = tag;
+                set[0].valid = true;
+                set[0].tag = tag;
+                return;
         }
         else
         {
+                // check if one of the 2 cache lines are not valid
+                int16_t line_to_remove = INT16_MIN; // unlikely that the associativity index is -2^15
                 for (size_t assoc_idx = 0; assoc_idx < self->assoc; assoc_idx++)
                 {
-                        if (self->lines[index][assoc_idx].used_recently == false)
+                        // if we find an invalid line, we will replace that
+                        if (set[assoc_idx].valid == false)
                         {
-                                self->lines[index][assoc_idx].valid = 1;
-                                // update the correct tag
-                                self->lines[index][assoc_idx].tag = tag;
-                                // fetched information from the memory, this is actually used
-                                self->lines[index][assoc_idx].used_recently = true;
-                                break; 
+                                line_to_remove = assoc_idx;
+                                break;
                         }
                 }
+                if (line_to_remove == INT16_MIN) // both lines valid
+                {
+                        // Both lines are valid, we apply the LRU policy
+                        for (size_t assoc_idx = 0; assoc_idx < self->assoc; assoc_idx++)
+                        {
+                                if (set[assoc_idx].used_recently == false)
+                                {
+                                        line_to_remove = assoc_idx;
+                                        break;
+                                }
+                        }
+                }
+                set[line_to_remove].valid = true;
+                // update the correct tag
+                set[line_to_remove].tag = tag;
+                // fetched information from the memory, this is actually used
+                set[line_to_remove].used_recently = true;
+                // set the other line to false
+                set[(line_to_remove + 1) % self->assoc].used_recently = false;
         }
 }
 
@@ -187,16 +207,13 @@ void avdc_access(avdark_cache_t *self, avdc_pa_t pa, avdc_access_type_t type)
                                 if (self->lines[index][assoc_idx].tag == tag)
                                 {
                                         self->lines[index][assoc_idx].used_recently = true;
-                                }
-                                else
-                                {
-                                        self->lines[index][assoc_idx].used_recently = false;
+                                        self->lines[index][(assoc_idx + 1) % self->assoc].used_recently = false;
                                 }
                         }
                 }
                 else
                 {
-                        /* do nothing */
+                        /* do nothing for direct mapped */
                 }
         }
 
@@ -263,8 +280,8 @@ int avdc_resize(avdark_cache_t *self,
         // int index = log2_int32(self->number_of_sets);
         self->tag_shift = self->block_size_log2 + log2_int32(self->number_of_sets);
 
-        // printf("Size=%d\nAssoc=%d-way\nCL=%d\nsets=%d\n", self->size, self->assoc, self->block_size, self->number_of_sets);
-        // printf("block_size_lg2=%d\nindex=%d\ntag_shift=%d\n", self->block_size_log2, index, self->tag_shift);
+        // printf("\nSize=%d\nAssoc=%d-way\nCL=%d\nsets=%d\n", self->size, self->assoc, self->block_size, self->number_of_sets);
+        // printf("block_size_lg2=%d\nindex=%d\ntag_shift=%d\n\n", self->block_size_log2, index, self->tag_shift);
 
         /* (Re-)Allocate space for the tags array */
         if (self->lines)
@@ -274,10 +291,10 @@ int avdc_resize(avdark_cache_t *self,
          * array is allocated. */
         // associativity = 1 -> direct mapped (1D array)
         // associativity = 2 -> more then 1 cache line on each set (2D array)
-        self->lines = (avdc_cache_line_t**)calloc(self->number_of_sets, sizeof(avdc_cache_line_t*)); // allocate n_sets pointers
+        self->lines = (avdc_cache_line_t **)calloc(self->number_of_sets, sizeof(avdc_cache_line_t *)); // allocate n_sets pointers
         for (size_t i = 0; i < self->number_of_sets; i++)
         {
-                self->lines[i] = (avdc_cache_line_t*)calloc(self->assoc, sizeof(avdc_cache_line_t));
+                self->lines[i] = (avdc_cache_line_t *)calloc(self->assoc, sizeof(avdc_cache_line_t));
         }
 
         /* Flush the cache, this initializes the tag array to a known state */
