@@ -44,7 +44,7 @@ TOOL_ROOTS := avdc
 SA_TOOL_ROOTS :=
 
 # This defines all the applications that will be run during the tests.
-APP_ROOTS := test0 test1
+APP_ROOTS := test0 test1 test2
 
 # This defines any additional object files that need to be compiled.
 OBJECT_ROOTS :=
@@ -251,7 +251,7 @@ $(OBJDIR)avdc$(PINTOOL_SUFFIX) : $(OBJDIR)pin-glue$(OBJ_SUFFIX) $(OBJDIR)avdark-
 ###### Special applications' build rules ######
 
 $(OBJDIR)test%$(EXE_SUFFIX): test%.c avdark-cache.c
-	$(APP_CC) -g $(APP_CXXFLAGS) $(COMP_EXE)$@ $^ $(APP_LDFLAGS) $(APP_LIBS)
+	$(APP_CC) -g $(APP_CXXFLAGS_NOOPT) $(COMP_EXE)$@ $^ $(APP_LDFLAGS) $(APP_LIBS)
 
 ###### Special objects' build rules ######
 
