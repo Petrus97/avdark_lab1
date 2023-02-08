@@ -15,59 +15,65 @@
 #include <stdio.h>
 #include <assert.h>
 
+// https://stackoverflow.com/questions/5867834/assert-with-message
+#define log_error(M, ...) fprintf(stderr, "[ABORT] (%s:%d) " M "\n", __FILE__, __LINE__, ##__VA_ARGS__)
+#define assertf(A, M, ...) if(!(A)) {log_error(M, ##__VA_ARGS__); assert(A); }
+
+
 #define STAT_ASSERT(c, r, rm, w, wm) do {                       \
-                assert(c->stat_data_read == (r));               \
-                assert(c->stat_data_read_miss == (rm));         \
-                assert(c->stat_data_write == (w));              \
-                assert(c->stat_data_write_miss == (wm));        \
+                assertf(c->stat_data_read == (r), "got: %ld - expected %d", c->stat_data_read, r); \ 
+                assertf(c->stat_data_read_miss == (rm), "got: %ld - expected %d", c->stat_data_read_miss, rm); \ 
+                assertf(c->stat_data_write == (w), "got: %ld - expected %d", c->stat_data_write, w); \ 
+                assertf(c->stat_data_write_miss == (wm), "got: %ld - expected %d", c->stat_data_write_miss, wm); \ 
         } while (0)
 
-#define TEST_SIMPLE_STAT() \
-        if (type == AVDC_READ)                                  \
-                STAT_ASSERT(cache, hits+misses, misses, 0, 0);   \
-        else if (type == AVDC_WRITE)                            \
-                STAT_ASSERT(cache, 0, 0, hits+misses, misses);  \
-        else                                                    \
+#define TEST_SIMPLE_STAT()                                       \
+        if (type == AVDC_READ)                                   \
+                STAT_ASSERT(cache, hits + misses, misses, 0, 0); \
+        else if (type == AVDC_WRITE)                             \
+                STAT_ASSERT(cache, 0, 0, hits + misses, misses); \
+        else                                                     \
                 abort()
 
-/* Test simple accesses to two consecutive cache lines */
-static void
-test_simple(avdark_cache_t *cache, avdc_access_type_t type)
-{
-        int i;
-        int hits = 0;
-        int misses = 0;
+        /* Test simple accesses to two consecutive cache lines */
+        static void
+        test_simple(avdark_cache_t *cache, avdc_access_type_t type)
+        {
+                int i;
+                int hits = 0;
+                int misses = 0;
 
-        avdc_reset_statistics(cache);
-        STAT_ASSERT(cache, 0, 0, 0, 0);
+                avdc_reset_statistics(cache);
+                STAT_ASSERT(cache, 0, 0, 0, 0);
 
-        /* Access the first cache line, we expect a read miss after this */
-        avdc_access(cache, 0, type);
-        misses++;
-        TEST_SIMPLE_STAT();
-
-        for (i = 0; i < cache->block_size; i++) {
-                /* Read every byte of the first cache line, expect hits */
-                avdc_access(cache, i, type);
-                hits++;
+                /* Access the first cache line, we expect a read miss after this */
+                avdc_access(cache, 0, type);
+                misses++;
                 TEST_SIMPLE_STAT();
+
+                for (i = 0; i < cache->block_size; i++)
+                {
+                        /* Read every byte of the first cache line, expect hits */
+                        avdc_access(cache, i, type);
+                        hits++;
+                        TEST_SIMPLE_STAT();
+                }
+
+                /** Access the second cache line */
+                avdc_access(cache, cache->block_size, type);
+                misses++;
+                TEST_SIMPLE_STAT();
+
+                for (i = 0; i < cache->block_size; i++)
+                {
+                        /* Read every byte of the 2nd cache line, expect hits */
+                        avdc_access(cache, cache->block_size + i, type);
+                        hits++;
+                        TEST_SIMPLE_STAT();
+                }
         }
 
-        /** Access the second cache line */
-        avdc_access(cache, cache->block_size, type);
-        misses++;
-        TEST_SIMPLE_STAT();
-
-        for (i = 0; i < cache->block_size; i++) {
-                /* Read every byte of the 2nd cache line, expect hits */
-                avdc_access(cache, cache->block_size + i, type);
-                hits++;
-                TEST_SIMPLE_STAT();
-        }
-}
-
-int
-main(int argc, char *argv[])
+int main(int argc, char *argv[])
 {
         avdark_cache_t *cache;
 
@@ -97,7 +103,7 @@ main(int argc, char *argv[])
         printf("Simple [write]\n");
         avdc_flush_cache(cache);
         test_simple(cache, AVDC_WRITE);
- 
+
         avdc_delete(cache);
 
         printf("%s done.\n", argv[0]);
